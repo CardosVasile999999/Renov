@@ -1,0 +1,86 @@
+{% extends "base.html" %}
+{% block title %}{% if facture.is_acompte %}FACTURE D'ACOMPTE{% else %}FACTURE{% endif %} N°{{ facture.facture_num }} — Dan Renov{% endblock %}
+{% block content %}
+  <div class="toolbar" style="margin-bottom:14px">
+    <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+      <a class="btn" href="{{ url_for('factures_index') }}">Înapoi</a>
+      <a class="btn primary" href="{{ url_for('facture_edit', facture_num=facture.facture_num) }}">Modifică</a>
+      <a class="btn" href="{{ url_for('export_one_facture_pdf', facture_num=facture.facture_num) }}" data-dl-pdf data-dl-name="FACTURE_{{ facture.facture_num }}.pdf">Descarcă PDF</a>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div style="display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;align-items:flex-start">
+      <div>
+        <div style="color:var(--muted);font-size:0.85rem;text-transform:uppercase;letter-spacing:0.06em">Referință</div>
+        <div style="font-size:1.25rem;font-weight:700;color:var(--gold)" class="mono">
+          {% if facture.is_acompte %}FACTURE D'ACOMPTE{% else %}FACTURE{% endif %} N°{{ facture.facture_num }}
+        </div>
+        {% if facture.devis_num_source %}
+          <div style="margin-top:6px;color:var(--muted);font-size:0.9rem">Din devis: <span class="mono">DEVIS N°{{ facture.devis_num_source }}</span></div>
+        {% endif %}
+      </div>
+      <div style="text-align:right">
+        <div class="mono">{{ facture.date_facture }}</div>
+        <div style="color:var(--muted);font-size:0.85rem">Valabilitate</div>
+        <div class="mono">{{ facture.date_validite }}</div>
+      </div>
+    </div>
+
+    <h3 style="margin:18px 0 8px;font-size:0.95rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.06em">Destinatar</h3>
+    <div>{{ facture.destinataire_nom }}</div>
+    <div>{{ facture.destinataire_adresse }}</div>
+    {% if facture.destinataire_cp %}<div>{{ facture.destinataire_cp }}</div>{% endif %}
+    {% if facture.destinataire_siret %}<div>{{ facture.destinataire_siret }}</div>{% endif %}
+    <div>{{ facture.destinataire_telephone }}</div>
+
+    <h3 style="margin:18px 0 8px;font-size:0.95rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.06em">Informații suplimentare</h3>
+    <div style="white-space:pre-wrap">{{ facture.infos_additionnelles or "" }}</div>
+
+    <h3 style="margin:18px 0 8px;font-size:0.95rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.06em">Plată</h3>
+    <div class="mono">{{ facture.mode_paiement }}</div>
+
+    <h3 style="margin:18px 0 8px;font-size:0.95rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.06em">d'acompte</h3>
+    <div class="mono">{{ "Da" if facture.is_acompte else "Nu" }}</div>
+
+    <h3 style="margin:18px 0 8px;font-size:0.95rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.06em">Date bancare</h3>
+    <div class="mono">{{ "Da" if facture.include_bank_details else "Nu" }}</div>
+
+    <h3 style="margin:18px 0 8px;font-size:0.95rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.06em">Rânduri</h3>
+    <table class="data">
+      <thead>
+        <tr>
+          <th>Descriere</th>
+          <th>Cant.</th>
+          <th>Unitate</th>
+          <th>Preț unitar</th>
+          <th>TVA</th>
+          <th style="text-align:right">Total TVA</th>
+          <th style="text-align:right">Total TTC</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for ln in facture.lignes %}
+          <tr>
+            <td>{{ ln.description }}</td>
+            <td class="mono">{{ ln.quantite }}</td>
+            <td>{{ ln.unite }}{% if ln.unite_pow is not none %}<sup>{{ ln.unite_pow }}</sup>{% endif %}</td>
+            <td class="mono">{{ "%.2f"|format(ln.prix_unitaire|float) }} €</td>
+            <td class="mono">{{ ln.taux_tva }} %</td>
+            <td style="text-align:right" class="mono">{{ "%.2f"|format(ln.ligne_total_tva)|replace(".", ",") }} €</td>
+            <td style="text-align:right" class="mono">{{ "%.2f"|format(ln.ligne_total_ttc)|replace(".", ",") }} €</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+
+    <div style="margin-top:14px;display:flex;justify-content:flex-end">
+      <div style="width:min(360px,100%);border:1px solid var(--line);border-radius:12px;padding:12px">
+        <div style="display:flex;justify-content:space-between;gap:10px"><span>Total HT</span><span class="mono">{{ "%.2f"|format(facture.total_ht)|replace(".", ",") }} €</span></div>
+        <div style="display:flex;justify-content:space-between;gap:10px;margin-top:6px"><span>Total TVA</span><span class="mono">{{ "%.2f"|format(facture.total_tva)|replace(".", ",") }} €</span></div>
+        <div style="display:flex;justify-content:space-between;gap:10px;margin-top:10px;padding-top:10px;border-top:1px solid var(--line)"><span><b>Total TTC</b></span><span class="mono"><b>{{ "%.2f"|format(facture.total_ttc)|replace(".", ",") }} €</b></span></div>
+      </div>
+    </div>
+  </div>
+{% endblock %}
+

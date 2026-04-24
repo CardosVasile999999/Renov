@@ -1,0 +1,188 @@
+{% extends "base.html" %}
+{% block title %}Facturi — Dan Renov{% endblock %}
+{% block content %}
+  <div class="toolbar">
+    <form class="search" method="get" action="{{ url_for('factures_index') }}">
+      <input type="text" name="q" value="{{ q }}" placeholder="Căutare (nr., nume, adresă, telefon, date…)" />
+      <button class="btn" type="submit">Filtrează</button>
+    </form>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <button class="btn" type="button" id="btnExportZip">Export PDF (selecție)</button>
+      <button class="btn ghost" type="button" id="btnExportAll">Exportă toate (ZIP)</button>
+      <a class="btn primary" href="{{ url_for('facture_new') }}">Factură nouă</a>
+    </div>
+  </div>
+
+  <div id="listErr" class="flash-err"></div>
+
+  <div class="panel">
+    {% if not factures_list %}
+      <p style="color:var(--muted);margin:0">Nu există facturi încă.</p>
+    {% else %}
+      <table class="data">
+        <thead>
+          <tr>
+            <th style="width:40px"><input type="checkbox" id="chkAll" class="chkbox" /></th>
+            <th class="sortable" data-sort-key="ref">Referință</th>
+            <th class="sortable" data-sort-key="dest">Destinatar</th>
+            <th class="sortable" data-sort-key="date">Data</th>
+            <th class="sortable" data-sort-key="valid">Valabilitate</th>
+            <th class="sortable" data-sort-key="pay">Plată</th>
+            <th class="sortable" data-sort-key="acompte">d'acompte</th>
+            <th class="sortable" data-sort-key="total" style="text-align:right">Total TTC</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for f in factures_list %}
+            <tr>
+              <td><input type="checkbox" class="chk chkbox" value="{{ f.facture_num }}" /></td>
+              <td class="mono">FACTURE N°{{ f.facture_num }}</td>
+              <td>{{ f.destinataire_nom }}</td>
+              <td class="mono">{{ f.date_facture }}</td>
+              <td class="mono">{{ f.date_validite }}</td>
+              <td class="mono">{{ f.mode_paiement }}</td>
+              <td class="mono">{{ "Da" if f.is_acompte else "Nu" }}</td>
+              <td style="text-align:right" class="mono">{{ "%.2f"|format(f.total_ttc)|replace(".", ",") }} €</td>
+              <td style="white-space:nowrap">
+                <a class="btn ghost" style="padding:6px 10px" href="{{ url_for('facture_view', facture_num=f.facture_num) }}">Vezi</a>
+                <a class="btn ghost" style="padding:6px 10px" href="{{ url_for('facture_edit', facture_num=f.facture_num) }}">Modifică</a>
+                <a class="btn ghost" style="padding:6px 10px" href="{{ url_for('export_one_facture_pdf', facture_num=f.facture_num) }}" data-dl-pdf data-dl-name="FACTURE_{{ f.facture_num }}.pdf">PDF</a>
+                <button class="btn danger" style="padding:6px 10px" data-del="{{ f.facture_num }}">Șterge</button>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% endif %}
+  </div>
+{% endblock %}
+{% block scripts %}
+  <script>
+    const err = document.getElementById("listErr");
+    const showErr = (m) => {
+      err.textContent = m || "";
+      err.classList.toggle("show", !!m);
+    };
+    document.getElementById("chkAll")?.addEventListener("change", (e) => {
+      document.querySelectorAll(".chk").forEach((c) => (c.checked = e.target.checked));
+    });
+    const postZip = async (nums) => {
+      const r = await fetch("{{ url_for('export_factures_zip') }}", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ nums }),
+      });
+      if (!r.ok) {
+        const j = await r.json().catch(() => ({}));
+        showErr(j.error || "Export eșuat.");
+        return;
+      }
+      showErr("");
+      const blob = await r.blob();
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = "factures_export.zip";
+      a.click();
+      URL.revokeObjectURL(a.href);
+    };
+    document.getElementById("btnExportAll")?.addEventListener("click", async () => {
+      const nums = [...document.querySelectorAll(".chk")].map((c) => c.value);
+      if (!nums.length) {
+        showErr("Nu există facturi de exportat.");
+        return;
+      }
+      showErr("");
+      await postZip(nums);
+    });
+    document.getElementById("btnExportZip")?.addEventListener("click", async () => {
+      const nums = [...document.querySelectorAll(".chk:checked")].map((c) => c.value);
+      if (!nums.length) {
+        showErr("Bifează cel puțin o factură.");
+        return;
+      }
+      showErr("");
+      await postZip(nums);
+    });
+    document.querySelectorAll("button[data-del]").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        const num = btn.getAttribute("data-del");
+        if (!confirm("Ștergi factura FACTURE N°" + num + "?")) return;
+        showErr("");
+        const delUrl = "{{ url_for('facture_delete', facture_num='PLACEHOLDER') }}".replace("PLACEHOLDER", encodeURIComponent(num));
+        const r = await fetch(delUrl, { method: "DELETE" });
+        const j = await r.json().catch(() => ({}));
+        if (!r.ok || !j.ok) {
+          showErr(j.error || "Ștergerea a eșuat.");
+          return;
+        }
+        location.reload();
+      });
+    });
+
+    // Sortare pe 3 stări: asc → desc → ordine inițială.
+    (function setupSort() {
+      const table = document.querySelector("table.data");
+      const tbody = table?.querySelector("tbody");
+      if (!table || !tbody) return;
+      const rows = Array.from(tbody.querySelectorAll("tr"));
+      rows.forEach((tr, i) => (tr.dataset.origIndex = String(i)));
+
+      const parseDDMMYYYY = (s) => {
+        const m = String(s || "").trim().match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+        if (!m) return Number.NEGATIVE_INFINITY;
+        return (parseInt(m[3], 10) * 10000) + (parseInt(m[2], 10) * 100) + parseInt(m[1], 10);
+      };
+      const getKey = (tr, key) => {
+        const tds = tr.querySelectorAll("td");
+        if (key === "ref") return parseInt((tr.querySelector("input.chk")?.value || "0"), 10) || 0;
+        if (key === "dest") return (tds[2]?.textContent || "").trim().toLocaleLowerCase();
+        if (key === "date") return parseDDMMYYYY(tds[3]?.textContent || "");
+        if (key === "valid") return parseDDMMYYYY(tds[4]?.textContent || "");
+        if (key === "pay") return (tds[5]?.textContent || "").trim().toLocaleLowerCase();
+        if (key === "acompte") return (tds[6]?.textContent || "").trim().toLocaleLowerCase();
+        if (key === "total") {
+          const raw = (tds[7]?.textContent || "").replace("€", "").trim().replace(/\s/g, "").replace(",", ".");
+          const v = parseFloat(raw);
+          return Number.isFinite(v) ? v : Number.NEGATIVE_INFINITY;
+        }
+        return "";
+      };
+
+      const headers = Array.from(table.querySelectorAll("th.sortable"));
+      const resetHeaderStates = (except) => {
+        headers.forEach((h) => {
+          if (h !== except) h.removeAttribute("data-sort-state");
+        });
+      };
+
+      headers.forEach((th) => {
+        th.addEventListener("click", () => {
+          const key = th.dataset.sortKey;
+          const cur = th.getAttribute("data-sort-state") || "";
+          const next = cur === "" ? "asc" : cur === "asc" ? "desc" : "";
+          resetHeaderStates(th);
+          if (next) th.setAttribute("data-sort-state", next);
+          else th.removeAttribute("data-sort-state");
+
+          const sorted = Array.from(tbody.querySelectorAll("tr"));
+          if (!next) {
+            sorted.sort((a, b) => (parseInt(a.dataset.origIndex, 10) - parseInt(b.dataset.origIndex, 10)));
+          } else {
+            sorted.sort((a, b) => {
+              const ka = getKey(a, key);
+              const kb = getKey(b, key);
+              let cmp = 0;
+              if (typeof ka === "number" && typeof kb === "number") cmp = ka - kb;
+              else cmp = String(ka).localeCompare(String(kb), "ro", { sensitivity: "base" });
+              if (cmp === 0) cmp = parseInt(a.dataset.origIndex, 10) - parseInt(b.dataset.origIndex, 10);
+              return next === "asc" ? cmp : -cmp;
+            });
+          }
+          sorted.forEach((tr) => tbody.appendChild(tr));
+        });
+      });
+    })();
+  </script>
+{% endblock %}
+

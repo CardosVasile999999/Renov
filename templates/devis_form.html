@@ -1,0 +1,186 @@
+{% extends "base.html" %}
+{% block title %}{% if mode == 'create' %}Devis nou{% else %}Modifică devisul{% endif %} — Dan Renov{% endblock %}
+{% block content %}
+  <div class="panel">
+    <h2 style="margin:0 0 14px;font-size:1.15rem;color:var(--gold)">
+      {% if mode == "create" %}Devis nou{% else %}Modifică DEVIS N°{{ devis.devis_num }}{% endif %}
+    </h2>
+    <div id="formErr" class="flash-err"></div>
+
+    <form id="f">
+      <input type="hidden" name="lignes_json" id="lignes_json" />
+      <div class="grid2">
+        <div style="grid-column:1 / -1">
+          <label class="field">Număr devis (doar cifre)</label>
+          <input type="text" name="devis_num" id="devis_num" required pattern="[0-9]+" {% if mode == "edit" %}readonly{% endif %}
+            value="{{ devis.devis_num if devis else '' }}" />
+          <div class="hint">În PDF apare ca DEVIS N°… (completat la 4 cifre dacă e nevoie).</div>
+        </div>
+        <div>
+          <label class="field">Destinatar — nume</label>
+          <input type="text" name="destinataire_nom" required value="{{ devis.destinataire_nom if devis else '' }}" />
+        </div>
+        <div>
+          <label class="field">Destinatar — adresă</label>
+          <input type="text" name="destinataire_adresse" required value="{{ devis.destinataire_adresse if devis else '' }}" />
+        </div>
+        <div>
+          <label class="field">Destinatar — cod poștal</label>
+          <input type="text" name="destinataire_cp" value="{{ devis.destinataire_cp if devis else '' }}" />
+        </div>
+        <div>
+          <label class="field">Destinatar — SIRET (opțional)</label>
+          <input type="text" name="destinataire_siret" value="{{ devis.destinataire_siret if devis else '' }}" />
+        </div>
+        <div>
+          <label class="field">Destinatar — telefon</label>
+          <input type="text" name="destinataire_telephone" required value="{{ devis.destinataire_telephone if devis else '' }}" />
+        </div>
+        <div>
+          <label class="field">Data devisului (ZZ/LL/AAAA)</label>
+          <input type="text" name="date_devis" required value="{{ devis.date_devis if devis else '' }}" />
+        </div>
+        <div>
+          <label class="field">Data valabilității (ZZ/LL/AAAA)</label>
+          <input type="text" name="date_validite" required value="{{ devis.date_validite if devis else '' }}" />
+        </div>
+        <div>
+          <div class="hint" style="margin-top:0;margin-bottom:6px">Dacă bifezi, în PDF apar IBAN și SWIFT/BIC în footer.</div>
+          <label class="check-row">
+            <input type="checkbox" name="include_bank_details" value="1" {% if devis and devis.include_bank_details %}checked{% endif %} />
+            <span class="check-text">Adaugi datele bancare?</span>
+          </label>
+        </div>
+      </div>
+      <div style="margin-top:12px">
+        <label class="field">Informații suplimentare (opțional)</label>
+        <textarea name="infos_additionnelles" rows="3">{{ devis.infos_additionnelles or '' }}</textarea>
+      </div>
+
+      <h3 style="margin:22px 0 10px;font-size:0.95rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.06em">Rânduri</h3>
+      <div class="lignes-head">
+        <div>Descriere</div>
+        <div>Cantitate</div>
+        <div style="display:flex;gap:6px;align-items:center">
+          <span style="flex:1;min-width:0">Unitate</span>
+          <span style="width:64px;text-align:center">Putere</span>
+        </div>
+        <div>Preț unitar (€)</div>
+        <div>TVA (%)</div>
+        <div></div>
+      </div>
+      <div id="lignes"></div>
+      <div style="margin-top:10px">
+        <button class="btn ghost" type="button" id="addLigne">Adaugă rând</button>
+      </div>
+
+      <div style="margin-top:18px;display:flex;gap:10px;flex-wrap:wrap">
+        <button class="btn primary" type="submit">Salvează</button>
+        <a class="btn" href="{{ url_for('index') }}">Renunță</a>
+      </div>
+    </form>
+  </div>
+{% endblock %}
+{% block scripts %}
+  {% if devis %}
+    <script id="seed" type="application/json">{{ devis.lignes | tojson }}</script>
+  {% else %}
+    <script id="seed" type="application/json">[]</script>
+  {% endif %}
+  <script>
+    const mode = {{ mode | tojson }};
+    const origNum = {{ (devis.devis_num if devis else '') | tojson }};
+    const err = document.getElementById("formErr");
+    const showErr = (m) => {
+      err.textContent = m || "";
+      err.classList.toggle("show", !!m);
+    };
+    const lignesEl = document.getElementById("lignes");
+    const tpl = () => {
+      const row = document.createElement("div");
+      row.className = "ligne-row";
+      row.innerHTML = `
+        <div><textarea class="d" placeholder="Descriere"></textarea></div>
+        <div><input class="q" type="number" step="1" min="0" value="1" /></div>
+        <div style="display:flex;gap:6px;align-items:center">
+          <input class="u" type="text" style="flex:1;min-width:0" />
+          <input class="up" type="number" step="1" min="0" max="9" title="Puterea unității (ex: 2 pentru m², 3 pentru m³) — opțional" style="width:64px" />
+        </div>
+        <div><input class="p" type="number" step="0.01" value="0" /></div>
+        <div><input class="t" type="number" step="1" max="100" value="10" /></div>
+        <div><button class="btn danger" type="button" title="Șterge rândul">✕</button></div>
+      `;
+      row.querySelector("button").addEventListener("click", () => row.remove());
+      return row;
+    };
+    const seed = JSON.parse(document.getElementById("seed").textContent || "[]");
+    if (seed.length) {
+      seed.forEach((ln) => {
+        const r = tpl();
+        r.querySelector(".d").value = ln.description || "";
+        r.querySelector(".q").value = String(ln.quantite ?? 1);
+        r.querySelector(".u").value = ln.unite || "";
+        r.querySelector(".up").value = (ln.unite_pow ?? "") === null ? "" : String(ln.unite_pow ?? "");
+        r.querySelector(".p").value = String(ln.prix_unitaire ?? 0);
+        r.querySelector(".t").value = String(ln.taux_tva ?? 10);
+        lignesEl.appendChild(r);
+      });
+    } else {
+      lignesEl.appendChild(tpl());
+    }
+    document.getElementById("addLigne").addEventListener("click", () => lignesEl.appendChild(tpl()));
+    function collect() {
+      const lignes = [];
+      for (const row of lignesEl.querySelectorAll(".ligne-row")) {
+        const description = row.querySelector(".d").value.trim();
+        const quantite = parseInt(row.querySelector(".q").value, 10);
+        const unite = row.querySelector(".u").value.trim();
+        const rawPow = row.querySelector(".up").value.trim();
+        const unite_pow = rawPow === "" ? null : parseInt(rawPow, 10);
+        const rawPrix = row.querySelector(".p").value.trim().replace(",", ".");
+        const prix_unitaire = parseFloat(rawPrix);
+        const taux_tva = parseInt(row.querySelector(".t").value, 10);
+        if (!description) continue;
+        if (!Number.isFinite(quantite) || quantite < 0) throw new Error("Cantitate invalidă.");
+        if (!unite) throw new Error("Unitatea este obligatorie pentru fiecare rând completat.");
+        if (unite_pow !== null && (!Number.isFinite(unite_pow) || unite_pow < 0 || unite_pow > 9)) throw new Error("Puterea unității este invalidă.");
+        if (!Number.isFinite(prix_unitaire)) throw new Error("Preț unitar invalid.");
+        if (!Number.isFinite(taux_tva)) throw new Error("TVA invalidă.");
+        lignes.push({ description, quantite, unite, unite_pow, prix_unitaire, taux_tva });
+      }
+      if (!lignes.length) throw new Error("Adaugă cel puțin un rând cu descriere.");
+      return lignes;
+    }
+    document.getElementById("f").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      showErr("");
+      let lignes;
+      try {
+        lignes = collect();
+      } catch (ex) {
+        showErr(ex.message || String(ex));
+        return;
+      }
+      const fd = new FormData(e.target);
+      fd.set("lignes_json", JSON.stringify(lignes));
+      try {
+        if (mode === "create") {
+          const r = await fetch("{{ url_for('devis_create') }}", { method: "POST", body: fd });
+          const j = await r.json();
+          if (!r.ok || !j.ok) throw new Error(j.error || "Eroare");
+          location.href = "{{ url_for('devis_view', devis_num='PLACEHOLDER') }}".replace("PLACEHOLDER", encodeURIComponent(j.devis_num));
+        } else {
+          const r = await fetch("{{ url_for('devis_update', devis_num='PLACEHOLDER') }}".replace("PLACEHOLDER", encodeURIComponent(origNum)), {
+            method: "PUT",
+            body: fd,
+          });
+          const j = await r.json();
+          if (!r.ok || !j.ok) throw new Error(j.error || "Eroare");
+          location.href = "{{ url_for('devis_view', devis_num='PLACEHOLDER') }}".replace("PLACEHOLDER", encodeURIComponent(origNum));
+        }
+      } catch (ex) {
+        showErr(ex.message || String(ex));
+      }
+    });
+  </script>
+{% endblock %}
