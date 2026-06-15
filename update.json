@@ -1,6 +1,6 @@
 {
-  "version": "1.1.2",
-  "min_version": "1.1.2",
-  "download_url": "https://github.com/CardosVasile999999/Renov/releases/download/v1.1.2/Renov.exe",
-  "release_notes": "Test update v1.1.2 — verificare actualizare automată."
+  "version": "1.1.3",
+  "min_version": "1.1.3",
+  "download_url": "https://github.com/CardosVasile999999/Renov/releases/download/v1.1.3/Renov.exe",
+  "release_notes": "Update automat reparat: descarcare in AppData, inlocuire exe cu reincercari, jurnal de erori."
 }

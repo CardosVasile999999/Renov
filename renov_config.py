@@ -28,6 +28,7 @@ UPDATE_MANIFEST_URL = (
 EXE_FILENAME = "Renov.exe"
 UPDATE_STAGING_FILENAME = "Renov-new.exe"
 UPDATE_BACKUP_FILENAME = "Renov.exe.bak"
+UPDATE_PS1_FILENAME = "_renov_apply_update.ps1"
 
 # Versiunea curentă (re-export pentru import unic din renov_config)
 APP_VERSION = __version__
@@ -51,6 +52,8 @@ else:
 
 DB_FILENAME = "devis.sqlite3"
 DB_PATH: Path = USER_DATA_DIR / DB_FILENAME
+UPDATE_DIR: Path = USER_DATA_DIR / "update"
+UPDATE_LOG_PATH: Path = UPDATE_DIR / "update.log"
 EXE_PATH: Path = INSTALL_DIR / EXE_FILENAME
 
 # Locația veche (în proiect) — doar pentru migrare la prima pornire
