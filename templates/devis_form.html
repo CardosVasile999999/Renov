@@ -37,12 +37,23 @@
           <input type="text" name="destinataire_telephone" required value="{{ devis.destinataire_telephone if devis else '' }}" />
         </div>
         <div>
+          <label class="field">Destinatar — TVA (opțional)</label>
+          <input type="text" name="destinataire_tva" value="{{ devis.destinataire_tva if devis else '' }}" />
+        </div>
+        <div>
           <label class="field">Data devisului (ZZ/LL/AAAA)</label>
           <input type="text" name="date_devis" required value="{{ devis.date_devis if devis else '' }}" />
         </div>
         <div>
           <label class="field">Data valabilității (ZZ/LL/AAAA)</label>
           <input type="text" name="date_validite" required value="{{ devis.date_validite if devis else '' }}" />
+        </div>
+        <div>
+          <div class="hint" style="margin-top:0;margin-bottom:6px">Dacă bifezi adaugi articolul 283-2</div>
+          <label class="check-row">
+            <input type="checkbox" name="include_art_283_2" value="1" {% if devis and devis.include_art_283_2 %}checked{% endif %} />
+            <span class="check-text">Adaugi articolul 283-2?</span>
+          </label>
         </div>
         <div>
           <div class="hint" style="margin-top:0;margin-bottom:6px">Dacă bifezi, în PDF apar IBAN și SWIFT/BIC în footer.</div>

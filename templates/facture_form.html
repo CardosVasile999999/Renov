@@ -59,12 +59,23 @@
           <input type="text" name="destinataire_telephone" id="destinataire_telephone" required value="{{ facture.destinataire_telephone if facture else '' }}" />
         </div>
         <div>
+          <label class="field">Destinatar — TVA (opțional)</label>
+          <input type="text" name="destinataire_tva" id="destinataire_tva" value="{{ facture.destinataire_tva if facture else '' }}" />
+        </div>
+        <div>
           <label class="field">Data facturii (ZZ/LL/AAAA)</label>
           <input type="text" name="date_facture" id="date_facture" required value="{{ facture.date_facture if facture else '' }}" />
         </div>
         <div>
           <label class="field">Data valabilității (ZZ/LL/AAAA)</label>
           <input type="text" name="date_validite" id="date_validite" required value="{{ facture.date_validite if facture else '' }}" />
+        </div>
+        <div>
+          <div class="hint" style="margin-top:0;margin-bottom:6px">Dacă bifezi adaugi articolul 283-2</div>
+          <label class="check-row">
+            <input type="checkbox" name="include_art_283_2" id="include_art_283_2" value="1" {% if facture and facture.include_art_283_2 %}checked{% endif %} />
+            <span class="check-text">Adaugi articolul 283-2?</span>
+          </label>
         </div>
         <div>
           <div class="hint" style="margin-top:0;margin-bottom:6px">Dacă bifezi, în PDF apar IBAN și SWIFT/BIC în footer.</div>
@@ -153,12 +164,15 @@
       document.getElementById("destinataire_cp").value = devis.destinataire_cp || "";
       document.getElementById("destinataire_siret").value = devis.destinataire_siret || "";
       document.getElementById("destinataire_telephone").value = devis.destinataire_telephone || "";
+      document.getElementById("destinataire_tva").value = devis.destinataire_tva || "";
       document.getElementById("date_facture").value = devis.date_devis || "";
       document.getElementById("date_validite").value = devis.date_validite || "";
       document.getElementById("infos_additionnelles").value = devis.infos_additionnelles || "";
       document.getElementById("devis_num_source").value = devis.devis_num || "";
       const bank = document.getElementById("include_bank_details");
       if (bank) bank.checked = !!devis.include_bank_details;
+      const art283 = document.getElementById("include_art_283_2");
+      if (art283) art283.checked = !!devis.include_art_283_2;
 
       lignesEl.innerHTML = "";
       const seed = devis.lignes || [];

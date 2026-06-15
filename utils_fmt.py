@@ -2,6 +2,17 @@ from __future__ import annotations
 
 import re
 from datetime import datetime
+from typing import Any
+
+
+def optional_clean(raw: Any) -> str | None:
+    """Câmp opțional gol: None, '', 'none', 'null' → None (nu se afișează)."""
+    if raw is None:
+        return None
+    s = str(raw).strip()
+    if not s or s.lower() in ("none", "null"):
+        return None
+    return s
 
 
 def normalize_devis_num(raw: str) -> str:

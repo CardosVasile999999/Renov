@@ -29,7 +29,7 @@ from reportlab.platypus import (
     TableStyle,
 )
 
-from utils_fmt import eur
+from utils_fmt import eur, optional_clean
 
 BASE_DIR = Path(__file__).resolve().parent
 LOGO_SOURCE = BASE_DIR / "static" / "images" / "logo_source.png"
@@ -231,14 +231,37 @@ def _logo_image(path: Path, max_h: float, max_w: float) -> tuple[Any, float, flo
     return Image(str(path), width=w, height=h), w, h
 
 
-def _tel_bold(phone_raw: str) -> str:
+def _tel_plain(phone_raw: str) -> str:
     raw = str(phone_raw).strip()
-    esc = _escape_html(raw)
-    for prefix in ("Tel :", "Tel:", "tel :", "tel:"):
+    for prefix in ("Tel :", "Tel:", "tel :", "tel:", "TEL :", "TEL:"):
         if raw.lower().startswith(prefix.lower()):
             rest = raw[len(prefix) :].strip()
-            return f"<b>{_escape_html(prefix)}</b> <b>{_escape_html(rest)}</b>"
-    return f"<b>Tel :</b> <b>{esc}</b>"
+            return f"Tel: {_escape_html(rest)}"
+    return f"Tel: {_escape_html(raw)}"
+
+
+def _destinataire_html(devis: dict[str, Any]) -> str:
+    parts = [
+        "<b>Destinataire</b>",
+        _escape_html(devis["destinataire_nom"]),
+        _escape_html(devis["destinataire_adresse"]),
+    ]
+    for key in ("destinataire_cp", "destinataire_siret"):
+        val = optional_clean(devis.get(key))
+        if val:
+            parts.append(_escape_html(val))
+    parts.append(_tel_plain(devis["destinataire_telephone"]))
+    tva = optional_clean(devis.get("destinataire_tva"))
+    if tva:
+        parts.append(_escape_html(tva))
+    return "<br/>".join(parts)
+
+
+ART_283_2_HTML = (
+    "Prestation exonérée de TVA<br/><br/>"
+    "par application du mécanisme d'autoliquidation de TVA<br/><br/>"
+    "Article 283-2 octies du CGI"
+)
 
 
 def _ods_table_col_widths(w_full: float) -> list[float]:
@@ -328,20 +351,7 @@ def build_pdf(devis: dict[str, Any], *, kind: str = "devis") -> bytes:
         ref = f"{ref_prefix}{devis[num_key]}"
         # În blocul de meta din dreapta, e suficient "N°xxxx" (labelul spune deja tipul documentului).
         ref_meta = f"N°{devis[num_key]}"
-        tel_html = _tel_bold(devis["destinataire_telephone"])
-        cp = str(devis.get("destinataire_cp") or "").strip()
-        siret = str(devis.get("destinataire_siret") or "").strip()
-        cp_line = f"{_escape_html(cp)}<br/>" if cp else ""
-        siret_line = f"{_escape_html(siret)}<br/>" if siret else ""
-        meta_left = Paragraph(
-            f"<b>Destinataire</b><br/>"
-            f"{_escape_html(devis['destinataire_nom'])}<br/>"
-            f"{_escape_html(devis['destinataire_adresse'])}<br/>"
-            f"{cp_line}"
-            f"{siret_line}"
-            f"{tel_html}",
-            styles["meta"],
-        )
+        meta_left = Paragraph(_destinataire_html(devis), styles["meta"])
         date_key = "date_devis" if kind_l == "devis" else "date_facture"
         ddv = _escape_html(devis[date_key])
         dv = _escape_html(devis["date_validite"])
@@ -432,36 +442,36 @@ def build_pdf(devis: dict[str, Any], *, kind: str = "devis") -> bytes:
         story.append(meta_tbl)
         story.append(Spacer(1, 3 * mm))
         
-        infos = devis.get("infos_additionnelles") or ""
-        # Păstrează newline-urile ca <br/> și aliniază textul cu titlul.
-        meta_infos = ParagraphStyle(
-            "meta_infos",
-            parent=styles["meta"],
-            leftIndent=0,
-            firstLineIndent=0,
-        )
-        infos_html = _escape_html(infos).replace("\n", "<br/>") if infos else "&nbsp;"
-        infos_block = Table(
-            [
-                [Paragraph("<b>Informations additionnelles :</b>", styles["bold"])],
-                [Spacer(1, 1.5 * mm)],
-                [Paragraph(infos_html, meta_infos)],
-            ],
-            colWidths=[w_full],
-        )
-        infos_block.setStyle(
-            TableStyle(
-                [
-                    ("LEFTPADDING", (0, 0), (-1, -1), 0),
-                    ("RIGHTPADDING", (0, 0), (-1, -1), 0),
-                    ("TOPPADDING", (0, 0), (-1, -1), 0),
-                    ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
-                    ("VALIGN", (0, 0), (-1, -1), "TOP"),
-                ]
+        infos = optional_clean(devis.get("infos_additionnelles"))
+        if infos:
+            meta_infos = ParagraphStyle(
+                "meta_infos",
+                parent=styles["meta"],
+                leftIndent=0,
+                firstLineIndent=0,
             )
-        )
-        story.append(infos_block)
-        story.append(Spacer(1, 4 * mm))
+            infos_html = _escape_html(infos).replace("\n", "<br/>")
+            infos_block = Table(
+                [
+                    [Paragraph("<b>Informations additionnelles :</b>", styles["bold"])],
+                    [Spacer(1, 1.5 * mm)],
+                    [Paragraph(infos_html, meta_infos)],
+                ],
+                colWidths=[w_full],
+            )
+            infos_block.setStyle(
+                TableStyle(
+                    [
+                        ("LEFTPADDING", (0, 0), (-1, -1), 0),
+                        ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+                        ("TOPPADDING", (0, 0), (-1, -1), 0),
+                        ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
+                        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                    ]
+                )
+            )
+            story.append(infos_block)
+            story.append(Spacer(1, 4 * mm))
         
         # ----- Tabel: antet + câte un rând per poziție (tabel normal)
         th = styles["table_header"]
@@ -653,16 +663,61 @@ def build_pdf(devis: dict[str, Any], *, kind: str = "devis") -> bytes:
             )
         )
         
-        # Totaluri + semnătură: mereu împreună (nu se despart între pagini).
-        totals_wrap = Table(
-            [[Spacer(w_full - block_w, 1), totals_inner]],
-            colWidths=[w_full - block_w, block_w],
+        # Totaluri + articol 283-2: aceeași structură 2 coloane ca Destinataire (col_l | col_r).
+        include_art = bool(devis.get("include_art_283_2"))
+        totals_right = Table(
+            [[Spacer(col_r - block_w, 1), totals_inner]],
+            colWidths=[col_r - block_w, block_w],
+        )
+        totals_right.setStyle(
+            TableStyle(
+                [
+                    ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                    ("ALIGN", (1, 0), (1, 0), "RIGHT"),
+                    ("LEFTPADDING", (0, 0), (-1, -1), 0),
+                    ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+                    ("TOPPADDING", (0, 0), (-1, -1), 0),
+                    ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
+                ]
+            )
+        )
+
+        if include_art:
+            art_style = ParagraphStyle(
+                "art283",
+                parent=styles["meta"],
+                fontSize=8,
+                leading=9.5,
+                alignment=TA_LEFT,
+                fontName="Helvetica",
+                leftIndent=0,
+                firstLineIndent=0,
+                spaceBefore=0,
+                spaceAfter=0,
+            )
+            left_cell: Any = Paragraph(ART_283_2_HTML, art_style)
+        else:
+            left_cell = ""
+
+        totals_row = Table([[left_cell, totals_right]], colWidths=[col_l, col_r])
+        totals_row.setStyle(
+            TableStyle(
+                [
+                    ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                    ("ALIGN", (0, 0), (0, 0), "LEFT"),
+                    ("ALIGN", (1, 0), (1, 0), "RIGHT"),
+                    ("LEFTPADDING", (0, 0), (-1, -1), 0),
+                    ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+                    ("TOPPADDING", (0, 0), (-1, -1), 0),
+                    ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
+                ]
+            )
         )
         sig_wrap = Table(
             [[Spacer(w_full - sig_w, 1), sig_inner]],
             colWidths=[w_full - sig_w, sig_w],
         )
-        story.append(KeepTogether([totals_wrap, Spacer(1, 4 * mm), sig_wrap]))
+        story.append(KeepTogether([totals_row, Spacer(1, 4 * mm), sig_wrap]))
         return story
         
     def _footer(c: canvas.Canvas, doc_w: SimpleDocTemplate | None = None) -> None:

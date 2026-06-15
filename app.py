@@ -25,7 +25,7 @@ from db import (
     update_facture,
 )
 from pdf_devis import build_pdf
-from utils_fmt import normalize_devis_num, validate_date_ddmmyyyy
+from utils_fmt import normalize_devis_num, optional_clean, validate_date_ddmmyyyy
 
 app = Flask(__name__)
 app.config["MAX_CONTENT_LENGTH"] = 4 * 1024 * 1024
@@ -87,13 +87,15 @@ def _payload_from_form(form) -> DevisPayload:
         devis_num=num,
         destinataire_nom=form.get("destinataire_nom", "").strip(),
         destinataire_adresse=form.get("destinataire_adresse", "").strip(),
-        destinataire_cp=(form.get("destinataire_cp", "") or "").strip() or None,
-        destinataire_siret=(form.get("destinataire_siret", "") or "").strip() or None,
+        destinataire_cp=optional_clean(form.get("destinataire_cp")),
+        destinataire_siret=optional_clean(form.get("destinataire_siret")),
         destinataire_telephone=form.get("destinataire_telephone", "").strip(),
-        infos_additionnelles=form.get("infos_additionnelles", "").strip() or None,
+        destinataire_tva=optional_clean(form.get("destinataire_tva")),
+        infos_additionnelles=optional_clean(form.get("infos_additionnelles")),
         date_devis=validate_date_ddmmyyyy(form.get("date_devis", "")),
         date_validite=validate_date_ddmmyyyy(form.get("date_validite", "")),
         include_bank_details=bool((form.get("include_bank_details") or "").strip()),
+        include_art_283_2=bool((form.get("include_art_283_2") or "").strip()),
         lignes=lignes,
     )
 
@@ -116,15 +118,17 @@ def _facture_payload_from_form(form) -> FacturePayload:
         devis_num_source=devis_src,
         destinataire_nom=form.get("destinataire_nom", "").strip(),
         destinataire_adresse=form.get("destinataire_adresse", "").strip(),
-        destinataire_cp=(form.get("destinataire_cp", "") or "").strip() or None,
-        destinataire_siret=(form.get("destinataire_siret", "") or "").strip() or None,
+        destinataire_cp=optional_clean(form.get("destinataire_cp")),
+        destinataire_siret=optional_clean(form.get("destinataire_siret")),
         destinataire_telephone=form.get("destinataire_telephone", "").strip(),
-        infos_additionnelles=form.get("infos_additionnelles", "").strip() or None,
+        destinataire_tva=optional_clean(form.get("destinataire_tva")),
+        infos_additionnelles=optional_clean(form.get("infos_additionnelles")),
         date_facture=validate_date_ddmmyyyy(form.get("date_facture", "")),
         date_validite=validate_date_ddmmyyyy(form.get("date_validite", "")),
         mode_paiement=mode_paiement,
         is_acompte=bool((form.get("is_acompte") or "").strip()),
         include_bank_details=bool((form.get("include_bank_details") or "").strip()),
+        include_art_283_2=bool((form.get("include_art_283_2") or "").strip()),
         lignes=lignes,
     )
 

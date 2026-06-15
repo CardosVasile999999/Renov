@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any, Generator, Iterable
 
 from renov_config import DB_PATH, migrate_legacy_database
+from utils_fmt import optional_clean
 
 
 @contextmanager
@@ -83,10 +84,12 @@ def init_db() -> None:
                 destinataire_cp TEXT,
                 destinataire_siret TEXT,
                 destinataire_telephone TEXT NOT NULL,
+                destinataire_tva TEXT,
                 infos_additionnelles TEXT,
                 date_devis TEXT NOT NULL,
                 date_validite TEXT NOT NULL,
                 include_bank_details INTEGER NOT NULL DEFAULT 0,
+                include_art_283_2 INTEGER NOT NULL DEFAULT 0,
                 total_ht REAL NOT NULL,
                 total_tva REAL NOT NULL,
                 total_ttc REAL NOT NULL
@@ -115,12 +118,14 @@ def init_db() -> None:
                 destinataire_cp TEXT,
                 destinataire_siret TEXT,
                 destinataire_telephone TEXT NOT NULL,
+                destinataire_tva TEXT,
                 infos_additionnelles TEXT,
                 date_facture TEXT NOT NULL,
                 date_validite TEXT NOT NULL,
                 mode_paiement TEXT NOT NULL,
                 is_acompte INTEGER NOT NULL DEFAULT 0,
                 include_bank_details INTEGER NOT NULL DEFAULT 0,
+                include_art_283_2 INTEGER NOT NULL DEFAULT 0,
                 total_ht REAL NOT NULL,
                 total_tva REAL NOT NULL,
                 total_ttc REAL NOT NULL
@@ -160,6 +165,10 @@ def init_db() -> None:
                 conn.execute("ALTER TABLE factures ADD COLUMN is_acompte INTEGER NOT NULL DEFAULT 0")
             if "include_bank_details" not in cols and rows:
                 conn.execute("ALTER TABLE factures ADD COLUMN include_bank_details INTEGER NOT NULL DEFAULT 0")
+            if "destinataire_tva" not in cols and rows:
+                conn.execute("ALTER TABLE factures ADD COLUMN destinataire_tva TEXT")
+            if "include_art_283_2" not in cols and rows:
+                conn.execute("ALTER TABLE factures ADD COLUMN include_art_283_2 INTEGER NOT NULL DEFAULT 0")
         except sqlite3.OperationalError:
             pass
         # Back-compat: devis — coloane noi
@@ -172,6 +181,10 @@ def init_db() -> None:
                 conn.execute("ALTER TABLE devis ADD COLUMN destinataire_siret TEXT")
             if "include_bank_details" not in cols and rows:
                 conn.execute("ALTER TABLE devis ADD COLUMN include_bank_details INTEGER NOT NULL DEFAULT 0")
+            if "destinataire_tva" not in cols and rows:
+                conn.execute("ALTER TABLE devis ADD COLUMN destinataire_tva TEXT")
+            if "include_art_283_2" not in cols and rows:
+                conn.execute("ALTER TABLE devis ADD COLUMN include_art_283_2 INTEGER NOT NULL DEFAULT 0")
         except sqlite3.OperationalError:
             pass
 
@@ -194,10 +207,12 @@ class DevisPayload:
     destinataire_cp: str | None
     destinataire_siret: str | None
     destinataire_telephone: str
+    destinataire_tva: str | None
     infos_additionnelles: str | None
     date_devis: str
     date_validite: str
     include_bank_details: bool
+    include_art_283_2: bool
     lignes: list[LigneInput] = field(default_factory=list)
 
 
@@ -210,12 +225,14 @@ class FacturePayload:
     destinataire_cp: str | None
     destinataire_siret: str | None
     destinataire_telephone: str
+    destinataire_tva: str | None
     infos_additionnelles: str | None
     date_facture: str
     date_validite: str
     mode_paiement: str
     is_acompte: bool
     include_bank_details: bool
+    include_art_283_2: bool
     lignes: list[LigneInput] = field(default_factory=list)
 
 
@@ -253,8 +270,9 @@ def insert_devis(payload: DevisPayload) -> None:
             """
             INSERT INTO devis (
                 devis_num, destinataire_nom, destinataire_adresse, destinataire_cp, destinataire_siret, destinataire_telephone,
-                infos_additionnelles, date_devis, date_validite, include_bank_details, total_ht, total_tva, total_ttc
-            ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)
+                destinataire_tva, infos_additionnelles, date_devis, date_validite, include_bank_details, include_art_283_2,
+                total_ht, total_tva, total_ttc
+            ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
             """,
             (
                 payload.devis_num,
@@ -263,10 +281,12 @@ def insert_devis(payload: DevisPayload) -> None:
                 payload.destinataire_cp or None,
                 payload.destinataire_siret or None,
                 payload.destinataire_telephone,
+                payload.destinataire_tva or None,
                 payload.infos_additionnelles or None,
                 payload.date_devis,
                 payload.date_validite,
                 1 if payload.include_bank_details else 0,
+                1 if payload.include_art_283_2 else 0,
                 total_ht,
                 total_tva,
                 total_ttc,
@@ -302,8 +322,8 @@ def update_devis(payload: DevisPayload) -> bool:
             """
             UPDATE devis SET
                 destinataire_nom=?, destinataire_adresse=?, destinataire_cp=?, destinataire_siret=?, destinataire_telephone=?,
-                infos_additionnelles=?, date_devis=?, date_validite=?,
-                include_bank_details=?,
+                destinataire_tva=?, infos_additionnelles=?, date_devis=?, date_validite=?,
+                include_bank_details=?, include_art_283_2=?,
                 total_ht=?, total_tva=?, total_ttc=?
             WHERE devis_num=?
             """,
@@ -313,10 +333,12 @@ def update_devis(payload: DevisPayload) -> bool:
                 payload.destinataire_cp or None,
                 payload.destinataire_siret or None,
                 payload.destinataire_telephone,
+                payload.destinataire_tva or None,
                 payload.infos_additionnelles or None,
                 payload.date_devis,
                 payload.date_validite,
                 1 if payload.include_bank_details else 0,
+                1 if payload.include_art_283_2 else 0,
                 total_ht,
                 total_tva,
                 total_ttc,
@@ -357,8 +379,9 @@ def insert_facture(payload: FacturePayload) -> None:
             """
             INSERT INTO factures (
                 facture_num, devis_num_source, destinataire_nom, destinataire_adresse, destinataire_cp, destinataire_siret, destinataire_telephone,
-                infos_additionnelles, date_facture, date_validite, mode_paiement, is_acompte, include_bank_details, total_ht, total_tva, total_ttc
-            ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                destinataire_tva, infos_additionnelles, date_facture, date_validite, mode_paiement, is_acompte, include_bank_details, include_art_283_2,
+                total_ht, total_tva, total_ttc
+            ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
             """,
             (
                 payload.facture_num,
@@ -368,12 +391,14 @@ def insert_facture(payload: FacturePayload) -> None:
                 payload.destinataire_cp or None,
                 payload.destinataire_siret or None,
                 payload.destinataire_telephone,
+                payload.destinataire_tva or None,
                 payload.infos_additionnelles or None,
                 payload.date_facture,
                 payload.date_validite,
                 payload.mode_paiement,
                 1 if payload.is_acompte else 0,
                 1 if payload.include_bank_details else 0,
+                1 if payload.include_art_283_2 else 0,
                 total_ht,
                 total_tva,
                 total_ttc,
@@ -409,8 +434,8 @@ def update_facture(payload: FacturePayload) -> bool:
             """
             UPDATE factures SET
                 devis_num_source=?, destinataire_nom=?, destinataire_adresse=?, destinataire_cp=?, destinataire_siret=?, destinataire_telephone=?,
-                infos_additionnelles=?, date_facture=?, date_validite=?, mode_paiement=?,
-                is_acompte=?, include_bank_details=?,
+                destinataire_tva=?, infos_additionnelles=?, date_facture=?, date_validite=?, mode_paiement=?,
+                is_acompte=?, include_bank_details=?, include_art_283_2=?,
                 total_ht=?, total_tva=?, total_ttc=?
             WHERE facture_num=?
             """,
@@ -421,12 +446,14 @@ def update_facture(payload: FacturePayload) -> bool:
                 payload.destinataire_cp or None,
                 payload.destinataire_siret or None,
                 payload.destinataire_telephone,
+                payload.destinataire_tva or None,
                 payload.infos_additionnelles or None,
                 payload.date_facture,
                 payload.date_validite,
                 payload.mode_paiement,
                 1 if payload.is_acompte else 0,
                 1 if payload.include_bank_details else 0,
+                1 if payload.include_art_283_2 else 0,
                 total_ht,
                 total_tva,
                 total_ttc,
@@ -466,6 +493,13 @@ def delete_facture(facture_num: str) -> bool:
         return cur.rowcount > 0
 
 
+def _normalize_optional_fields(d: dict[str, Any]) -> dict[str, Any]:
+    for key in ("destinataire_cp", "destinataire_siret", "destinataire_tva", "infos_additionnelles"):
+        if key in d:
+            d[key] = optional_clean(d.get(key))
+    return d
+
+
 def get_facture(facture_num: str) -> dict[str, Any] | None:
     with get_conn() as conn:
         row = conn.execute("SELECT * FROM factures WHERE facture_num=?", (facture_num,)).fetchone()
@@ -477,7 +511,7 @@ def get_facture(facture_num: str) -> dict[str, Any] | None:
         ).fetchall()
         d = dict(row)
         d["lignes"] = [dict(l) for l in lignes]
-        return d
+        return _normalize_optional_fields(d)
 
 
 def list_factures(q: str | None = None) -> list[dict[str, Any]]:
@@ -492,7 +526,7 @@ def list_factures(q: str | None = None) -> list[dict[str, Any]]:
     sql += " ORDER BY facture_num"
     with get_conn() as conn:
         rows = conn.execute(sql, args).fetchall()
-        return [dict(r) for r in rows]
+        return [_normalize_optional_fields(dict(r)) for r in rows]
 
 
 def delete_devis(devis_num: str) -> bool:
@@ -512,7 +546,7 @@ def get_devis(devis_num: str) -> dict[str, Any] | None:
         ).fetchall()
         d = dict(row)
         d["lignes"] = [dict(l) for l in lignes]
-        return d
+        return _normalize_optional_fields(d)
 
 
 def list_devis(q: str | None = None) -> list[dict[str, Any]]:
@@ -527,7 +561,7 @@ def list_devis(q: str | None = None) -> list[dict[str, Any]]:
     sql += " ORDER BY devis_num"
     with get_conn() as conn:
         rows = conn.execute(sql, args).fetchall()
-        return [dict(r) for r in rows]
+        return [_normalize_optional_fields(dict(r)) for r in rows]
 
 
 def get_many(nums: Iterable[str]) -> list[dict[str, Any]]:
@@ -548,7 +582,7 @@ def get_many(nums: Iterable[str]) -> list[dict[str, Any]]:
                 (d["devis_num"],),
             ).fetchall()
             d["lignes"] = [dict(l) for l in lignes]
-            out.append(d)
+            out.append(_normalize_optional_fields(d))
         return out
 
 

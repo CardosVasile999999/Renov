@@ -28,9 +28,13 @@
     {% if devis.destinataire_cp %}<div>{{ devis.destinataire_cp }}</div>{% endif %}
     {% if devis.destinataire_siret %}<div>{{ devis.destinataire_siret }}</div>{% endif %}
     <div>{{ devis.destinataire_telephone }}</div>
+    {% if devis.destinataire_tva %}<div>{{ devis.destinataire_tva }}</div>{% endif %}
 
     <h3 style="margin:18px 0 8px;font-size:0.95rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.06em">Informații suplimentare</h3>
     <div style="white-space:pre-wrap">{{ devis.infos_additionnelles or "" }}</div>
+
+    <h3 style="margin:18px 0 8px;font-size:0.95rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.06em">Articol 283-2</h3>
+    <div class="mono">{{ "Da" if devis.include_art_283_2 else "Nu" }}</div>
 
     <h3 style="margin:18px 0 8px;font-size:0.95rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.06em">Date bancare</h3>
     <div class="mono">{{ "Da" if devis.include_bank_details else "Nu" }}</div>

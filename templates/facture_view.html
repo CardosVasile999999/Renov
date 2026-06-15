@@ -33,6 +33,7 @@
     {% if facture.destinataire_cp %}<div>{{ facture.destinataire_cp }}</div>{% endif %}
     {% if facture.destinataire_siret %}<div>{{ facture.destinataire_siret }}</div>{% endif %}
     <div>{{ facture.destinataire_telephone }}</div>
+    {% if facture.destinataire_tva %}<div>{{ facture.destinataire_tva }}</div>{% endif %}
 
     <h3 style="margin:18px 0 8px;font-size:0.95rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.06em">Informații suplimentare</h3>
     <div style="white-space:pre-wrap">{{ facture.infos_additionnelles or "" }}</div>
@@ -42,6 +43,9 @@
 
     <h3 style="margin:18px 0 8px;font-size:0.95rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.06em">d'acompte</h3>
     <div class="mono">{{ "Da" if facture.is_acompte else "Nu" }}</div>
+
+    <h3 style="margin:18px 0 8px;font-size:0.95rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.06em">Articol 283-2</h3>
+    <div class="mono">{{ "Da" if facture.include_art_283_2 else "Nu" }}</div>
 
     <h3 style="margin:18px 0 8px;font-size:0.95rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.06em">Date bancare</h3>
     <div class="mono">{{ "Da" if facture.include_bank_details else "Nu" }}</div>
