@@ -29,25 +29,35 @@ def download_new_exe(url: str, dest: Path, timeout_s: float = 120.0) -> bool:
         return False
 
 
-def _batch_script(install_dir: Path) -> str:
-    exe = EXE_FILENAME
+def _batch_script(install_dir: Path, exe_name: str) -> str:
     staging = UPDATE_STAGING_FILENAME
     backup = UPDATE_BACKUP_FILENAME
     return f"""@echo off
-setlocal
+setlocal EnableExtensions
 cd /d "{install_dir}"
+set "EXE={exe_name}"
+set /a N=0
 timeout /t 2 /nobreak >nul
 :wait
-tasklist /FI "IMAGENAME eq {exe}" 2>nul | find /I "{exe}" >nul
+tasklist /FI "IMAGENAME eq %EXE%" 2>nul | find /I "%EXE%" >nul
 if not errorlevel 1 (
+    set /a N+=1
+    if %N% GEQ 30 goto force
     timeout /t 1 /nobreak >nul
     goto wait
 )
+goto apply
+:force
+taskkill /F /IM "%EXE%" /T >nul 2>&1
+timeout /t 2 /nobreak >nul
+:apply
+if not exist "{staging}" exit /b 1
 if exist "{backup}" del /f /q "{backup}"
-if exist "{exe}" move /Y "{exe}" "{backup}"
-move /Y "{staging}" "{exe}"
-start "" "{install_dir}\\{exe}"
-del "%~f0"
+if exist "%EXE%" move /Y "%EXE%" "{backup}" >nul
+move /Y "{staging}" "%EXE%" >nul
+start "" "{install_dir}\\%EXE%"
+del /f /q "%~f0" >nul 2>&1
+exit /b 0
 """
 
 
@@ -77,8 +87,9 @@ def apply_exe_update(download_url: str) -> bool:
         return False
 
     batch_path = INSTALL_DIR / "_renov_apply_update.bat"
+    exe_name = Path(sys.executable).name if getattr(sys, "frozen", False) else EXE_FILENAME
     try:
-        batch_path.write_text(_batch_script(INSTALL_DIR), encoding="utf-8")
+        batch_path.write_text(_batch_script(INSTALL_DIR, exe_name), encoding="utf-8")
     except OSError:
         show_error(
             "Dan Renov — actualizare eșuată",
@@ -87,10 +98,13 @@ def apply_exe_update(download_url: str) -> bool:
         return False
 
     try:
+        creationflags = subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP
+        if sys.platform == "win32" and hasattr(subprocess, "CREATE_NO_WINDOW"):
+            creationflags |= subprocess.CREATE_NO_WINDOW
         subprocess.Popen(
             ["cmd", "/c", str(batch_path)],
             cwd=str(INSTALL_DIR),
-            creationflags=subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP,
+            creationflags=creationflags,
             close_fds=True,
         )
     except OSError:

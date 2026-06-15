@@ -316,7 +316,7 @@ if __name__ == "__main__":
     from updater import run_update_check
 
     if run_update_check():
-        sys.exit(0)
+        os._exit(0)
 
     def _free_port() -> int:
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
