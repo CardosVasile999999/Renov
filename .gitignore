@@ -209,6 +209,9 @@ tempCodeRunnerFile.py
 # PyPI configuration file
 .pypirc
 
+# Date utilizator (SQLite în AppData, nu în proiect)
+data/
+
 # Marimo
 marimo/_static/
 marimo/_lsp/

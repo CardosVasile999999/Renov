@@ -9,7 +9,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Generator, Iterable
 
-DB_PATH = Path(__file__).resolve().parent / "data" / "devis.sqlite3"
+from renov_config import DB_PATH, migrate_legacy_database
 
 
 @contextmanager
@@ -72,6 +72,7 @@ def _ensure_ligne_unite_pow_column(conn: sqlite3.Connection) -> None:
 
 
 def init_db() -> None:
+    migrate_legacy_database()
     with get_conn() as conn:
         conn.executescript(
             """

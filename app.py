@@ -303,10 +303,16 @@ db.init_db()
 if __name__ == "__main__":
     import os
     import socket
+    import sys
     import threading
     import time
     import webbrowser
     from werkzeug.serving import make_server
+
+    from updater import run_update_check
+
+    if run_update_check():
+        sys.exit(0)
 
     def _free_port() -> int:
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
@@ -323,9 +329,9 @@ if __name__ == "__main__":
                 time.sleep(0.05)
         raise RuntimeError(f"Server did not become ready on {host}:{port}")
 
-    # Implicit: pornește server local și deschide în browser.
-    # Mod desktop (pywebview) este opțional: setează RENOV_DESKTOP=1.
-    if os.environ.get("RENOV_DESKTOP"):
+    # .exe (PyInstaller): întotdeauna fereastră desktop.
+    # Din sursă: RENOV_DESKTOP=1 pentru pywebview, altfel browser.
+    if getattr(sys, "frozen", False) or os.environ.get("RENOV_DESKTOP"):
         import importlib
 
         importlib.import_module("desktop").main()
