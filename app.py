@@ -332,9 +332,9 @@ if __name__ == "__main__":
     # .exe (PyInstaller): întotdeauna fereastră desktop.
     # Din sursă: RENOV_DESKTOP=1 pentru pywebview, altfel browser.
     if getattr(sys, "frozen", False) or os.environ.get("RENOV_DESKTOP"):
-        import importlib
+        from desktop import main as desktop_main
 
-        importlib.import_module("desktop").main()
+        desktop_main()
     else:
         port = int(os.environ.get("PORT") or 0) or _free_port()
         server = make_server("127.0.0.1", port, app, threaded=True)
